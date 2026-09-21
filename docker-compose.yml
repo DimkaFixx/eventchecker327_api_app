@@ -1,0 +1,10 @@
+services:
+  event_api:
+    build: .
+    container_name: event_api_327
+    restart: always
+    env_file:
+      - .env
+    ports:
+      # Пробрасываем порт 4443 наружу
+      - "4443:4443"
