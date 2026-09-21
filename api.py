@@ -6,8 +6,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-# Модели берутся из вашего db.py
-from db import s1_327, s2_327
+# Берем модели прямо из вашего db.py
+from db import s1_327, s2_327, MSK_TZ
 
 load_dotenv()
 DB_URL = os.getenv("DB_URL")
@@ -18,7 +18,6 @@ if not DB_URL or not API_KEY:
 
 app = FastAPI(title="327 Event Monitor API")
 engine = create_engine(DB_URL)
-MSK_TZ = timezone(timedelta(hours=3))
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -30,7 +29,7 @@ def verify_api_key(header_key: str = Security(api_key_header)):
 @app.get("/online/327", dependencies=[Depends(verify_api_key)])
 def get_current_327_online(server: int):
     """
-    Возвращает список бойцов 327, замеченных на сервере за последние 7 минут.
+    Возвращает список полных ников игроков 327, замеченных онлайн за последние 7 минут.
     """
     if server == 1:
         table = s1_327
@@ -39,28 +38,33 @@ def get_current_327_online(server: int):
     else:
         raise HTTPException(status_code=400, detail="Доступны только серверы 1 или 2")
 
-    # Временное окно: последние 7 минут
-    time_threshold = (datetime.now(MSK_TZ) - timedelta(minutes=7)).isoformat(timespec="seconds")
+    # Временное окно: 7 минут назад по МСК (с запасом к 5-минутному циклу парсера)
+    now_msk = datetime.now(MSK_TZ)
+    time_threshold = (now_msk - timedelta(minutes=7)).isoformat(timespec="seconds")
+    today_date = now_msk.date().isoformat()
 
     with Session(engine) as session:
+        # Фильтруем строго по сегодняшнему дню и времени последней активности
         stmt = (
             select(table.full_nick, table.nick)
             .where(
-                table.last_seen_at >= time_threshold,
-                table.bat == "327"
+                table.date == today_date,
+                table.last_seen_at >= time_threshold
             )
         )
         rows = session.execute(stmt).all()
 
-    online_players = []
+    online_full_nicks = set()
     for full_nick, nick in rows:
-        chosen_nick = full_nick if full_nick else nick
-        if chosen_nick:
-            online_players.append(chosen_nick.strip())
+        # Приоритет отдаем полному нику со всеми префиксами
+        # Если вдруг для старой записи full_nick еще пустой — берем обычный nick
+        player_name = full_nick if full_nick else nick
+        if player_name and player_name.strip():
+            online_full_nicks.add(player_name.strip())
 
     return {
         "status": "ok",
         "server": server,
-        "count": len(set(online_players)),
-        "players": list(set(online_players))
+        "count": len(online_full_nicks),
+        "players": sorted(list(online_full_nicks)) # отдаем полный сырой список
     }
