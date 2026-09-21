@@ -8,3 +8,5 @@ services:
     ports:
       # Пробрасываем порт 4443 наружу
       - "4443:4443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
