@@ -3,7 +3,6 @@ services:
     build: .
     container_name: event_api_327
     restart: always
-    ports:
-      # Пробрасываем порт 4443 наружу
-      - "4443:4443"
+    env_file:
+      - .env
     network_mode: "host" 
