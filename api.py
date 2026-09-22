@@ -15,7 +15,12 @@ if not DB_URL or not API_KEY:
 
 # Настройки базы и времени
 app = FastAPI(title="327 Event Monitor API")
-engine = create_engine(DB_URL)
+engine = create_engine(
+    DB_URL,
+    pool_pre_ping=True,      # Проверяет соединение перед запросом
+    pool_recycle=300,        # Сбрасывает старые соединения каждые 5 минут
+)
+
 Base = declarative_base()
 MSK_TZ = timezone(timedelta(hours=3))
 
